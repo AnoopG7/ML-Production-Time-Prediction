@@ -1,0 +1,44 @@
+Case Study no. 100
+
+Production Time Estimation
+
+Problem Statement:
+
+A factory wants to estimate the time required for a selected production process.
+(With Proper Justification)
+
+Objectives
+● Understand and formally define the assigned real-world machine-learning problem.
+● Identify and justify an appropriate dataset or data-collection approach.
+● Determine the required prediction, classification, estimation, grouping, detection,
+forecasting or recommendation output.
+● Perform data cleaning, exploratory analysis and suitable preprocessing.
+● Select and justify appropriate machine-learning methods and compare meaningful
+experiments.
+● Choose evaluation measures appropriate to the problem and interpret the results.
+● Develop a functional Streamlit application demonstrating the final solution.
+
+Outcomes
+● A clearly defined and documented machine-learning problem.
+● A prepared dataset with documented source, quality issues and preprocessing decisions.
+● Exploratory analysis with meaningful observations.
+● A trained and evaluated machine-learning model or analytical system.
+● Documented experimentation and error/result analysis.
+● A working Streamlit prototype with understandable inputs and outputs.
+
+Deliverables
+● Problem Definition – Clearly state the selected machine-learning problem and
+student-formulated project title.
+● Dataset & Documentation – Provide the dataset/source, data description, relevant
+variables and data-quality observations.
+● EDA – Include exploratory analysis, visualizations and important findings.
+● Preprocessing – Implement and document cleaning, encoding, scaling, feature
+preparation and other necessary steps.
+● Model Development – Build the selected machine-learning solution and document
+experiments or model comparison.
+● Evaluation – Report suitable performance measures, analyze errors/results and explain
+limitations.
+● Streamlit Application – Develop a functional and user-friendly application demonstrating
+the complete solution.
+● Final Report & Presentation – Submit the report, source code, application demonstration,
+presentation and viva evidence.
