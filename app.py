@@ -9,6 +9,7 @@ import joblib
 import plotly.express as px
 import plotly.graph_objects as go
 import os
+import glob
 
 # -- Page Config --
 st.set_page_config(
@@ -47,6 +48,13 @@ st.markdown('''
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def resolve(filename):
+    """Return an existing path for `filename`, searching the project dir first."""
+    candidates = [os.path.join(BASE_DIR, filename), filename]
+    candidates += sorted(glob.glob(os.path.join('..', '..', filename)))
+    candidates += sorted(glob.glob(os.path.join('..', filename)))
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
     return os.path.join(BASE_DIR, filename)
 
 # -- Load Artifacts --
