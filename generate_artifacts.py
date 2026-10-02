@@ -11,7 +11,7 @@ from sklearn.svm import SVR
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 import joblib
 
-print("Generating synthetic factory dataset...")
+print("Generating realistic synthetic factory dataset (18% industrial variance)...")
 np.random.seed(42)
 N = 4500
 
@@ -45,6 +45,7 @@ data = {
 df = pd.DataFrame(data)
 
 prod_times = []
+planned_times = []
 for _, row in df.iterrows():
     base = product_rates[row['product_type']]
     meff = machine_eff[row['machine_id']]
@@ -53,13 +54,24 @@ for _, row in df.iterrows():
     ef = max(0.65, 1.0 - 0.012 * row['operator_experience_yrs'])
     wf = 1.0 + 0.18 * (row['num_workers'] - 1)
     dp = 1.0 + 0.02 * row['defect_rate_pct']
-    t = ((row['setup_time_min']/60) + row['batch_size'] * base * cf * dp)
-    t = t / (meff * wf) * sf * ef * np.random.normal(1.0, 0.08)
-    prod_times.append(round(max(0.3, t), 2))
-df['production_time_hrs'] = prod_times
-df['planned_time_hrs'] = np.round(df['production_time_hrs'] * np.random.uniform(0.85, 1.25, N), 2)
+    # Operational variance factors
+    mat_factor = 1.08 if row['material_grade'] == 'Economy' else (0.97 if row['material_grade'] == 'Premium' else 1.0)
+    heat_factor = 1.04 if row['ambient_temp_c'] > 33 else 1.0
 
-# Injected issues
+    t = ((row['setup_time_min']/60) + row['batch_size'] * base * cf * dp * mat_factor)
+    # 18% realistic manufacturing variance
+    t = (t / (meff * wf)) * sf * ef * heat_factor * np.random.normal(1.0, 0.18)
+    actual_t = round(max(0.3, t), 2)
+    prod_times.append(actual_t)
+
+    # Human static planning schedule (nominal standard conditions with realistic planner error)
+    plan_t = round(max(0.5, ((row['setup_time_min']/60) + row['batch_size'] * base * 1.0) / (1.0 * (1.0 + 0.18 * 2)) * np.random.normal(1.0, 0.15)), 2)
+    planned_times.append(plan_t)
+
+df['production_time_hrs'] = prod_times
+df['planned_time_hrs'] = planned_times
+
+# Injected data quality issues
 for col, pct in [('operator_experience_yrs', 0.06),
                  ('humidity_pct', 0.08), ('defect_rate_pct', 0.04)]:
     idx = np.random.choice(N, size=int(N * pct), replace=False)
@@ -135,7 +147,9 @@ df_processed['time_deviation'] = df_processed['planned_time_hrs'] - df_processed
 
 df_processed.drop(columns=['product_type', 'machine_id', 'shift', 'day_of_week'], inplace=True)
 
-X = df_processed.drop(['production_time_hrs', 'time_deviation'], axis=1)
+# DROP target variable, post-hoc time_deviation, AND planned_time_hrs to prevent target leakage!
+drop_cols = ['production_time_hrs', 'time_deviation', 'planned_time_hrs']
+X = df_processed.drop(columns=[c for c in drop_cols if c in df_processed.columns])
 y = df_processed['production_time_hrs']
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -144,7 +158,9 @@ scaler = StandardScaler()
 X_train_scaled = pd.DataFrame(scaler.fit_transform(X_train), columns=X.columns, index=X_train.index)
 X_test_scaled = pd.DataFrame(scaler.transform(X_test), columns=X.columns, index=X_test.index)
 
-print("Training Models...")
+print(f"Training Features ({len(X.columns)}): {list(X.columns)}")
+
+print("\nTraining 7 Models...")
 models = {
     'Linear Regression': LinearRegression(),
     'Ridge Regression': Ridge(alpha=1.0),
@@ -178,18 +194,23 @@ for name, model in models.items():
 
 comparison_df = pd.DataFrame(results).sort_values('Test R2', ascending=False)
 comparison_df.to_csv('model_comparison.csv', index=False)
-print("[OK] Saved model_comparison.csv")
+print("\n[OK] Saved model_comparison.csv")
 
-print("Training Tuned Best Model (Random Forest)...")
+print("\nTraining Tuned Best Model (Random Forest)...")
 tuned_rf = RandomForestRegressor(
-    n_estimators=187,
-    max_depth=15,
-    min_samples_split=12,
-    min_samples_leaf=7,
+    n_estimators=200,
+    max_depth=16,
+    min_samples_split=8,
+    min_samples_leaf=4,
     random_state=42,
     n_jobs=-1
 )
 tuned_rf.fit(X_train, y_train)
+tuned_pred = tuned_rf.predict(X_test)
+tuned_r2 = r2_score(y_test, tuned_pred)
+tuned_mae = mean_absolute_error(y_test, tuned_pred)
+print(f"  Tuned Random Forest Test R2: {tuned_r2:.4f}, MAE: {tuned_mae:.4f}")
+
 joblib.dump(tuned_rf, 'production_time_model.pkl')
 print("[OK] Saved production_time_model.pkl")
 
@@ -207,6 +228,17 @@ print("[OK] Saved label_encoders.pkl")
 
 feature_names = list(X.columns)
 joblib.dump(feature_names, 'feature_names.pkl')
-print("[OK] Saved feature_names.pkl")
+print(f"[OK] Saved feature_names.pkl ({len(feature_names)} features)")
 
-print("\nAll artifacts generated successfully in the project directory!")
+# Business comparison: Human Static Planning vs ML Best Model
+human_mae = mean_absolute_error(y_test, df_clean.loc[y_test.index, 'planned_time_hrs'])
+human_r2 = r2_score(y_test, df_clean.loc[y_test.index, 'planned_time_hrs'])
+err_reduc = ((human_mae - tuned_mae) / human_mae) * 100
+print(f"\n{'='*60}")
+print("BUSINESS IMPACT ANALYSIS:")
+print(f"  Human Planner Schedule MAE: {human_mae:.2f} hrs (R2: {human_r2:.4f})")
+print(f"  ML Best Model MAE:          {tuned_mae:.2f} hrs (R2: {tuned_r2:.4f})")
+print(f"  Accuracy Gain:              {err_reduc:.1f}% error reduction over static planning!")
+print(f"{'='*60}")
+
+print("\nAll updated artifacts generated successfully!")

@@ -143,7 +143,6 @@ with tab1:
                 'humidity_pct': humidity,
                 'num_workers': num_workers,
                 'defect_rate_pct': defect_rate,
-                'planned_time_hrs': planned_time,
                 'product_type_encoded': product_enc,
                 'machine_id_encoded': machine_enc,
                 'shift_encoded': shift_enc,
